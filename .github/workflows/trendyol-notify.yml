@@ -8,9 +8,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: trendyol-notify
+  cancel-in-progress: false
+
 jobs:
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Kodu indir
         uses: actions/checkout@v4
@@ -30,12 +35,26 @@ jobs:
           TRENDYOL_API_SECRET: ${{ secrets.TRENDYOL_API_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python trendyol_notify.py
+          TELEGRAM_IADE_SORU_CHAT_ID: ${{ secrets.TELEGRAM_IADE_SORU_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          required = ["TRENDYOL_SELLER_ID", "TRENDYOL_API_KEY",
+                      "TRENDYOL_API_SECRET", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
+          missing = [name for name in required if not os.environ.get(name, "").strip()]
+          if missing:
+              print("::error::Eksik GitHub Secrets: " + ", ".join(missing))
+              sys.exit(1)
+          PY
+          python trendyol_notify.py
 
       - name: State kaydet
+        if: always()
         run: |
           git config user.name "trendyol-bot"
           git config user.email "actions@github.com"
           git add state.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "state guncellendi"
-          git push
+          if ! git diff --staged --quiet; then
+            git commit -m "state guncellendi"
+            git push
+          fi
